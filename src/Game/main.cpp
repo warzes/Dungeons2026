@@ -3,7 +3,8 @@
 //=============================================================================
 #if defined(_MSC_VER)
 #	pragma comment( lib, "3rdparty.lib" )
-#	pragma comment( lib, "OpenGL32.lib" )
+#	pragma comment( lib, "d3d11.lib" )
+#	pragma comment( lib, "d3dcompiler.lib" )
 #endif
 //=============================================================================
 int main(

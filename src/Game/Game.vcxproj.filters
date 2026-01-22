@@ -10,10 +10,10 @@
     <ClCompile Include="EngineMath.cpp">
       <Filter>Engine</Filter>
     </ClCompile>
-    <ClCompile Include="EngineWin32.cpp">
+    <ClCompile Include="Engine.cpp">
       <Filter>Engine</Filter>
     </ClCompile>
-    <ClCompile Include="RenderD3D11.cpp">
+    <ClCompile Include="Render.cpp">
       <Filter>Engine</Filter>
     </ClCompile>
   </ItemGroup>

@@ -15,13 +15,11 @@ namespace
 {
 	uint16_t windowWidth;
 	uint16_t windowHeight;
-	uint16_t frameBufferWidth;
-	uint16_t frameBufferHeight;
+	bool     windowIsResize{ false };
 
 	bool IsRunningApp{ false };
 
-	constexpr const wchar_t* WindowClassName{ L"RetroEngineWindowClass" };
-	HINSTANCE hInstance{ nullptr };
+	constexpr const wchar_t* WindowClassName{ L"EngineWindowClass" };
 	HWND hwnd{ nullptr };
 	MSG msg{};
 
@@ -29,14 +27,10 @@ namespace
 	float deltaTime{ 0.0f };
 }
 //=============================================================================
-void setWindowSize(uint16_t width, uint16_t height)
-{
-	windowWidth = width;
-	windowHeight = height;
-
-	const float aspect = static_cast<float>(width) / static_cast<float>(height);
-	frameBufferWidth = static_cast<uint16_t>(static_cast<float>(frameBufferHeight) * aspect);
-}
+bool InitializeRender(HWND hwnd, uint16_t wndWidth, uint16_t wndHeight);
+void ShutdownRender();
+void RenderResize(uint16_t wndWidth, uint16_t wndHeight);
+void RenderSwap();
 //=============================================================================
 void ExitEngineApp()
 {
@@ -59,7 +53,9 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 			int height = HIWORD(lParam);
 			if (width > 0 && height > 0)
 			{
-				setWindowSize(static_cast<uint16_t>(width), static_cast<uint16_t>(height));
+				windowWidth = static_cast<uint16_t>(width);
+				windowHeight = static_cast<uint16_t>(height);
+				windowIsResize = true;
 			}
 		}
 		break;
@@ -72,7 +68,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 	return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 //=============================================================================
-bool engine::Initialize(uint16_t wndWidth, uint16_t wndHeight, const wchar_t* windowTitle, uint16_t fbHeight)
+bool engine::Initialize(uint16_t wndWidth, uint16_t wndHeight, const wchar_t* windowTitle)
 {
 	// Validate parameters
 	{
@@ -91,28 +87,11 @@ bool engine::Initialize(uint16_t wndWidth, uint16_t wndHeight, const wchar_t* wi
 			Fatal("Window height cannot be zero!");
 			return false;
 		}
-		if (fbHeight == 0)
-		{
-			Fatal("Frame buffer height cannot be zero!");
-			return false;
-		}
-		if (fbHeight > wndHeight)
-		{
-			Warning("Frame buffer height is greater than window height. Clamping frame buffer height to window height.");
-			fbHeight = wndHeight;
-		}
 	}
 
-	frameBufferHeight = fbHeight;
-	setWindowSize(wndWidth, wndHeight);
-
-	hInstance = GetModuleHandle(nullptr);
-
 	WNDCLASSEX wndclassex{ .cbSize = sizeof(WNDCLASSEX) };
-	wndclassex.style         = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+	wndclassex.style         = CS_HREDRAW | CS_VREDRAW;
 	wndclassex.lpfnWndProc   = WindowProc;
-	wndclassex.hInstance     = hInstance;
-	wndclassex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
 	wndclassex.hCursor       = LoadCursor(nullptr, IDC_ARROW);
 	wndclassex.lpszClassName = WindowClassName;
 	if (!RegisterClassEx(&wndclassex))
@@ -121,37 +100,36 @@ bool engine::Initialize(uint16_t wndWidth, uint16_t wndHeight, const wchar_t* wi
 		return false;
 	}
 
-	RECT rect = { 0, 0, windowWidth, windowHeight };
-	DWORD winStyleEx = WS_EX_OVERLAPPEDWINDOW;
+	RECT initialRect = { 0, 0, wndWidth, wndHeight };
 	DWORD winStyle = WS_OVERLAPPEDWINDOW;
-	AdjustWindowRectEx(&rect, winStyle, false, winStyleEx);
+	DWORD winStyleEx = WS_EX_OVERLAPPEDWINDOW;
+	AdjustWindowRectEx(&initialRect, winStyle, false, winStyleEx);
+	LONG initialWidth = initialRect.right - initialRect.left;
+	LONG initialHeight = initialRect.bottom - initialRect.top;
 
 	hwnd = CreateWindowEx(winStyleEx, WindowClassName, windowTitle, winStyle,
 		CW_USEDEFAULT, CW_USEDEFAULT,
-		rect.right - rect.left, rect.bottom - rect.top,
-		nullptr, nullptr, hInstance, nullptr);
+		initialWidth, initialHeight,
+		nullptr, nullptr, nullptr, nullptr);
 	if (!hwnd)
 	{
 		Fatal("Failed to create window!");
 		return false;
 	}
 	ShowWindow(hwnd, SW_SHOW);
-	UpdateWindow(hwnd);
 
-	GetClientRect(hwnd, &rect);
-	auto clientWidth = (rect.right - rect.left);
-	auto clientHeight = (rect.bottom - rect.top);
-	if (clientWidth < 0 || clientHeight < 0)
-	{
-		Fatal("Invalid window rectangle dimensions");
-		return false;
-	}
-
-	windowWidth = static_cast<uint16_t>(clientWidth);
-	windowHeight = static_cast<uint16_t>(clientHeight);
+	windowWidth = wndWidth;
+	windowHeight = wndHeight;
+	windowIsResize = false;
 
 	lastFrameTime = std::chrono::steady_clock::now();
 	deltaTime = 0.0f;
+
+	if (!InitializeRender(hwnd, windowWidth, windowHeight))
+	{
+		Fatal("Failed to initialize rendering!");
+		return false;
+	}
 
 	IsRunningApp = true;
 	return true;
@@ -160,11 +138,9 @@ bool engine::Initialize(uint16_t wndWidth, uint16_t wndHeight, const wchar_t* wi
 void engine::Shutdown()
 {
 	IsRunningApp = false;
-
+	ShutdownRender();
 	if (hwnd) DestroyWindow(hwnd);
-	if (hInstance) UnregisterClass(WindowClassName, hInstance);
 	hwnd = nullptr;
-	hInstance = nullptr;
 }
 //=============================================================================
 bool engine::IsRunning()
@@ -192,12 +168,19 @@ void engine::BeginFrame()
 	auto currentTime = std::chrono::steady_clock::now();
 	deltaTime = std::chrono::duration<float>(currentTime - lastFrameTime).count();
 	lastFrameTime = currentTime;
+
+	if (windowIsResize)
+	{
+		RenderResize(windowWidth, windowHeight);
+		windowIsResize = false;
+	}
 }
 //=============================================================================
 void engine::EndFrame()
 {
+	RenderSwap();
 	wchar_t title[100];
-	float currentFPS = 1.0f / deltaTime;
+	float currentFPS = 1.0f / std::max(deltaTime, 0.0001f);
 	swprintf_s(title, L"Engine - FPS: %.2f, DeltaTime: %.4f", currentFPS, deltaTime);
 	SetWindowText(hwnd, title);
 }

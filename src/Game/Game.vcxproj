@@ -98,8 +98,8 @@
     <ClCompile Include="EngineMath.cpp" />
     <ClCompile Include="GameApp.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="EngineWin32.cpp" />
-    <ClCompile Include="RenderD3D11.cpp" />
+    <ClCompile Include="Engine.cpp" />
+    <ClCompile Include="Render.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
