@@ -22,7 +22,7 @@
 //#include <array>
 //#include <list>
 //#include <vector>
-//#include <unordered_map>
+#include <unordered_map>
 #include <string>
 
 #if defined(_WIN32)
@@ -68,10 +68,10 @@
 #	define WIN32_LEAN_AND_MEAN
 
 #	include <Windows.h>
-
+#	include <wrl.h>
 #	include <d3d11_4.h>
 #	include <d3dcompiler.h>
-
+#	include <dxgi1_6.h>
 #endif
 
 #if defined(_MSC_VER)
